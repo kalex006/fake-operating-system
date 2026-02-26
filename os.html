@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kali Linux | Web Shell</title>
+    <style>
+        /* --- CORE THEME --- */
+        :root {
+            --bg: #050505;
+            --panel: #1a1a1a;
+            --header: #2d2d2d;
+            --kali-blue: #258bf8;
+            --kali-text: #e6e6e6;
+            --terminal-bg: rgba(12, 12, 12, 0.95);
+            --border: 1px solid #333;
+            --shadow: 0 10px 40px rgba(0,0,0,0.8);
+            --font-ui: 'Segoe UI', sans-serif;
+            --font-mono: 'Consolas', 'Monaco', monospace;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg);
+            color: var(--kali-text);
+            font-family: var(--font-ui);
+            width: 100vw; height: 100dvh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* --- LAYER 1: BINARY RAIN --- */
+        #matrix-bg {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            opacity: 0.25; /* Matrix rain opacity */
+        }
+
+        /* --- LAYER 2: CENTERED KALI LOGO --- */
+        #wallpaper-logo {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50vmin; /* Responsive size based on viewport */
+            height: 50vmin;
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/2/29/Kali-dragon-icon.svg');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            opacity: 0.3; /* Visible but allows text reading on top */
+            z-index: 1;
+            pointer-events: none;
+            filter: drop-shadow(0 0 20px rgba(0,0,0,0.8));
+        }
+
+        /* --- LAYER 3: DESKTOP ICONS --- */
+        #desktop {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: calc(100% - 45px);
+            z-index: 10;
+            padding: 20px;
+            display: flex; flex-direction: column; flex-wrap: wrap; gap: 15px;
+            align-content: flex-start;
+        }
+
+        .icon {
+            width: 85px; display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; padding: 10px; border-radius: 6px;
+            transition: 0.2s;
+        }
+        .icon:hover { background: rgba(255,255,255,0.08); }
+        .icon:active { background: rgba(255,255,255,0.15); transform: scale(0.95); }
+        
+        .icon-img { font-size: 38px; margin-bottom: 5px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)); }
+        .icon-text { font-size: 13px; text-shadow: 0 1px 3px black; text-align: center; color: white; line-height: 1.2; }
+
+        /* --- LAYER 4: WINDOW SYSTEM --- */
+        .window {
+            position: absolute;
+            background: var(--panel);
+            border: var(--border);
+            border-radius: 6px 6px 0 0;
+            box-shadow: var(--shadow);
+            display: flex; flex-direction: column;
+            min-width: 300px; min-height: 200px;
+            overflow: hidden;
+            animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        .title-bar {
+            height: 36px; background: var(--header);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 10px; cursor: grab;
+            border-bottom: 1px solid #000;
+        }
+        .title-text { font-size: 13px; font-weight: 700; color: #ccc; letter-spacing: 0.5px; }
+        
+        .win-actions { display: flex; gap: 8px; }
+        .win-btn { width: 12px; height: 12px; border-radius: 50%; cursor: pointer; }
+        .btn-close { background: #ff5555; } 
+        .btn-min { background: #ffbd2e; } 
+        .btn-max { background: #27c93f; }
+
+        .win-content { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+
+        /* --- APP: TERMINAL --- */
+        .term-wrap {
+            background: var(--terminal-bg);
+            padding: 10px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            color: #fff;
+            overflow-y: auto;
+            flex: 1;
+            cursor: text;
+        }
+        
+        .cmd-history { margin-bottom: 5px; line-height: 1.4; white-space: pre-wrap; }
+        
+        .prompt-line { display: flex; align-items: center; flex-wrap: wrap; }
+        .p-root { color: #db3a3a; font-weight: bold; }
+        .p-at { color: #fff; }
+        .p-host { color: #db3a3a; }
+        .p-path { color: var(--kali-blue); font-weight: bold; }
+        .p-symbol { color: #fff; font-weight: bold; margin-right: 8px; }
+        
+        .term-input {
+            background: transparent; border: none; color: #fff;
+            font-family: inherit; font-size: inherit; outline: none;
+            flex: 1; min-width: 100px; padding: 0; margin: 0;
+        }
+
+        /* --- LAYER 5: TASKBAR --- */
+        #taskbar {
+            position: absolute; bottom: 0; left: 0;
+            width: 100%; height: 45px;
+            background: #111;
+            border-top: 1px solid #333;
+            display: flex; align-items: center;
+            padding: 0 10px; gap: 5px;
+            z-index: 9999;
+        }
+
+        .kali-menu {
+            width: 32px; height: 32px;
+            /* Small Logo for Start Menu */
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/2/29/Kali-dragon-icon.svg');
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+            cursor: pointer; margin-right: 15px;
+            filter: drop-shadow(0 0 5px rgba(37, 139, 248, 0.5));
+            transition: 0.3s;
+        }
+        .kali-menu:hover { filter: drop-shadow(0 0 8px rgba(37, 139, 248, 1)); transform: scale(1.1); }
+
+        .task-tab {
+            background: #2d2d2d; padding: 6px 12px;
+            border-radius: 4px; font-size: 12px; cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #bbb; transition: 0.2s;
+            max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .task-tab.active { border-bottom: 2px solid var(--kali-blue); background: #353535; color: white; }
+
+        /* --- MOBILE OPTIMIZATION --- */
+        @media (max-width: 768px) {
+            .window { top: 0 !important; left: 0 !important; width: 100% !important; height: calc(100% - 45px) !important; border-radius: 0; transform: none; }
+            .title-bar { cursor: default; } /* No dragging on mobile, it's fullscreen */
+            .term-input { font-size: 16px; } /* Prevent iOS zoom */
+            #wallpaper-logo { opacity: 0.2; } /* Slightly fainter on small screens */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- BACKGROUNDS -->
+    <canvas id="matrix-bg"></canvas>
+    <div id="wallpaper-logo"></div> <!-- THE CENTERED LOGO -->
+
+    <!-- UI LAYERS -->
+    <div id="desktop"></div>
+    <div id="taskbar"></div>
+
+    <script>
+        /**
+         * KALI WEB CORE V3.0
+         * - Pure JS DOM Generation
+         * - Virtual File System
+         * - Touch/Mouse Unified Events
+         */
+
+        // --- 1. SYSTEM STATE ---
+        const System = {
+            processes: [],
+            zIndex: 100,
+            isMobile: ('ontouchstart' in window) || window.innerWidth < 768
+        };
+
+        // --- 2. VIRTUAL FILE SYSTEM (PERSISTENT) ---
+        const DefaultFS = {
+            "root": { type: "dir", children: ["home", "bin"] },
+            "home": { type: "dir", children: ["kali"] },
+            "kali": { type: "dir", children: ["Desktop", "Downloads", "notes.txt", "port-scan.py"] },
+            "Desktop": { type: "dir", children: [] },
+            "Downloads": { type: "dir", children: [] },
+            "notes.txt": { type: "file", content: "Target IP: 10.10.10.5\nOS: Linux\nVuln: SSH weak pass" },
+            "port-scan.py": { type: "file", content: "import socket\nprint('Scanning ports...')" }
+        };
+
+        // Load FS from storage or use default
+        let FS = JSON.parse(localStorage.getItem('kali_fs_v3')) || JSON.parse(JSON.stringify(DefaultFS));
+        const saveFS = () => localStorage.setItem('kali_fs_v3', JSON.stringify(FS));
+
+        // Path Handling
+        let pathStack = ["root", "home", "kali"]; 
+        const getCurDirName = () => pathStack[pathStack.length - 1];
+        
+        const getPathString = () => {
+            if (pathStack.length === 3 && pathStack[2] === "kali") return "~";
+            if (pathStack.length > 3) return "~/" + pathStack.slice(3).join("/");
+            return "/";
+        };
+
+        // --- 3. MATRIX RAIN ENGINE ---
+        const initMatrix = () => {
+            const cvs = document.getElementById('matrix-bg');
+            const ctx = cvs.getContext('2d');
+            
+            const resize = () => { cvs.width = window.innerWidth; cvs.height = window.innerHeight; };
+            window.onresize = resize;
+            resize();
+
+            const chars = "01";
+            const fs = 14;
+            const cols = cvs.width / fs;
+            const drops = Array(Math.floor(cols)).fill(1);
+
+            setInterval(() => {
+                ctx.fillStyle = "rgba(5, 5, 5, 0.05)";
+                ctx.fillRect(0, 0, cvs.width, cvs.height);
+                ctx.fillStyle = "#0F0"; // Hacker Green
+                ctx.font = fs + "px monospace";
+
+                for (let i = 0; i < drops.length; i++) {
+                    const txt = chars[Math.floor(Math.random() * chars.length)];
+                    ctx.fillText(txt, i * fs, drops[i] * fs);
+                    if (drops[i] * fs > cvs.height && Math.random() > 0.975) drops[i] = 0;
+                    drops[i]++;
+                }
+            }, 50);
+        };
+
+        // --- 4. WINDOW MANAGER ---
+        const Apps = {
+            "terminal": {
+                name: "Root Terminal",
+                icon: "💻",
+                init: (pid) => initTerminal(pid),
+                render: (pid) => `
+                    <div class="term-wrap" id="term-${pid}" onclick="document.getElementById('in-${pid}').focus()">
+                        <div class="cmd-history">
+                            <div>Kali GNU/Linux Rolling [Version 2025.1]</div>
+                            <div>File System Initialized. Type <span style="color:var(--kali-blue)">help</span>.</div>
+                        </div>
+                        <div id="output-${pid}"></div>
+                        <div class="prompt-line">
+                            <span class="p-root">root</span><span class="p-at">@</span><span class="p-host">kali</span>:<span class="p-path" id="path-${pid}">~</span><span class="p-symbol">#</span>
+                            <input id="in-${pid}" class="term-input" autocomplete="off" spellcheck="false">
+                        </div>
+                    </div>
+                `
+            },
+            "notes": {
+                name: "Mousepad",
+                icon: "📝",
+                init: (pid) => {},
+                render: (pid) => `<textarea style="width:100%; height:100%; background:#1a1a1a; color:#ddd; border:none; padding:15px; resize:none; outline:none; font-family:monospace;" placeholder="Write code or notes..."></textarea>`
+            },
+            "browser": {
+                name: "Firefox ESR",
+                icon: "🦊",
+                init: () => {},
+                render: (pid) => `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#555;"><h1>No Internet Connection</h1></div>`
+            },
+            "reset": {
+                name: "Reset System",
+                icon: "⚠️",
+                init: () => {
+                    if(confirm("Reset entire File System?")) {
+                        localStorage.removeItem('kali_fs_v3');
+                        location.reload();
+                    }
+                },
+                render: (pid) => "" // Does not open window, just action
+            }
+        };
+
+        const WM = {
+            open: (appKey) => {
+                // If it's just an action (like reset), run init and return
+                if(Apps[appKey].render(0) === "") {
+                    Apps[appKey].init(0);
+                    return;
+                }
+
+                const app = Apps[appKey];
+                const pid = Date.now() + Math.random();
+                System.zIndex++;
+
+                // Create Window DOM
+                const win = document.createElement('div');
+                win.className = 'window';
+                win.id = `win-${pid}`;
+                win.style.zIndex = System.zIndex;
+                
+                const offset = (System.processes.length * 25) % 150;
+                win.style.top = (60 + offset) + 'px';
+                win.style.left = (60 + offset) + 'px';
+                win.style.width = System.isMobile ? '100%' : '650px';
+                win.style.height = System.isMobile ? '100%' : '450px';
+
+                win.innerHTML = `
+                    <div class="title-bar" onmousedown="WM.dragStart(event, '${pid}')" ontouchstart="WM.dragStart(event, '${pid}')">
+                        <span class="title-text">${app.name}</span>
+                        <div class="win-actions">
+                            <div class="win-btn btn-min"></div>
+                            <div class="win-btn btn-max"></div>
+                            <div class="win-btn btn-close" onclick="WM.close('${pid}')" ontouchstart="WM.close('${pid}')"></div>
+                        </div>
+                    </div>
+                    <div class="win-content">${app.render(pid)}</div>
+                `;
+
+                document.body.appendChild(win);
+                
+                WM.addTaskbar(pid, app.name);
+                if(app.init) app.init(pid);
+                
+                System.processes.push({ pid, id: `win-${pid}` });
+                WM.focus(pid);
+            },
+
+            close: (pid) => {
+                const win = document.getElementById(`win-${pid}`);
+                if(win) win.remove();
+                const task = document.getElementById(`task-${pid}`);
+                if(task) task.remove();
+                System.processes = System.processes.filter(p => p.pid !== pid);
+            },
+
+            focus: (pid) => {
+                System.zIndex++;
+                const win = document.getElementById(`win-${pid}`);
+                if(win) {
+                    win.style.zIndex = System.zIndex;
+                    document.querySelectorAll('.task-tab').forEach(t => t.classList.remove('active'));
+                    const task = document.getElementById(`task-${pid}`);
+                    if(task) task.classList.add('active');
+                }
+            },
+
+            addTaskbar: (pid, name) => {
+                const task = document.createElement('div');
+                task.className = 'task-tab active';
+                task.id = `task-${pid}`;
+                task.innerText = name;
+                task.onclick = () => WM.focus(pid);
+                document.getElementById('taskbar').appendChild(task);
+            },
+
+            // Unified Drag Logic
+            dragStart: (e, pid) => {
+                if(System.isMobile) return;
+                const win = document.getElementById(`win-${pid}`);
+                WM.focus(pid);
+                
+                const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                
+                const shiftX = clientX - win.getBoundingClientRect().left;
+                const shiftY = clientY - win.getBoundingClientRect().top;
+
+                const onMove = (ev) => {
+                    const cx = ev.type.includes('touch') ? ev.touches[0].clientX : ev.clientX;
+                    const cy = ev.type.includes('touch') ? ev.touches[0].clientY : ev.clientY;
+                    win.style.left = (cx - shiftX) + 'px';
+                    win.style.top = (cy - shiftY) + 'px';
+                };
+
+                const onEnd = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onEnd);
+                    document.removeEventListener('touchmove', onMove);
+                    document.removeEventListener('touchend', onEnd);
+                };
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onEnd);
+                document.addEventListener('touchmove', onMove, {passive: false});
+                document.addEventListener('touchend', onEnd);
+            }
+        };
+
+        // --- 5. TERMINAL SHELL LOGIC ---
+        function initTerminal(pid) {
+            const input = document.getElementById(`in-${pid}`);
+            const output = document.getElementById(`output-${pid}`);
+            const pathEl = document.getElementById(`path-${pid}`);
+            
+            // Set initial path
+            pathEl.innerText = getPathString();
+
+            input.addEventListener('keydown', (e) => {
+                if(e.key === 'Enter') {
+                    const raw = input.value;
+                    const parts = raw.trim().split(/\s+/);
+                    const cmd = parts[0];
+                    const args = parts.slice(1);
+
+                    // Echo command to history
+                    output.innerHTML += `
+                        <div class="cmd-history">
+                            <span class="p-root">root</span><span class="p-at">@</span><span class="p-host">kali</span>:<span class="p-path">${pathEl.innerText}</span><span class="p-symbol">#</span> ${raw}
+                        </div>
+                    `;
+
+                    if(cmd) runShell(cmd, args, output);
+
+                    input.value = "";
+                    document.getElementById(`term-${pid}`).scrollTop = 10000; // Auto scroll
+                    pathEl.innerText = getPathString(); // Update prompt if path changed
+                }
+            });
+        }
+
+        function runShell(cmd, args, out) {
+            const curKey = getCurDirName();
+            const curObj = FS[curKey];
+
+            const log = (msg, col="#ccc") => out.innerHTML += `<div style="color:${col}; margin-bottom:5px; white-space:pre-wrap;">${msg}</div>`;
+
+            switch(cmd) {
+                case 'help':
+                    log("GNU bash, version 5.1-release (x86_64-pc-linux-gnu)");
+                    log("Commands: ls, cd, mkdir, rm, cat, whoami, clear, date");
+                    break;
+                case 'ls':
+                    if(curObj.children.length === 0) return;
+                    let html = "";
+                    curObj.children.forEach(item => {
+                        const isDir = FS[item].type === 'dir';
+                        html += `<span style="color:${isDir?'var(--kali-blue)':'#fff'}; font-weight:${isDir?'bold':'normal'}; margin-right:15px">${item}</span>`;
+                    });
+                    log(html);
+                    break;
+                case 'mkdir':
+                    if(!args[0]) return log("mkdir: missing operand", "red");
+                    if(curObj.children.includes(args[0])) return log(`mkdir: cannot create '${args[0]}': File exists`, "red");
+                    FS[args[0]] = { type:"dir", children:[] };
+                    curObj.children.push(args[0]);
+                    saveFS();
+                    break;
+                case 'cd':
+                    if(!args[0] || args[0] === "~") { pathStack = ["root", "home", "kali"]; return; }
+                    if(args[0] === "..") { if(pathStack.length > 1) pathStack.pop(); return; }
+                    if(curObj.children.includes(args[0]) && FS[args[0]].type === 'dir') {
+                        pathStack.push(args[0]);
+                    } else {
+                        log(`cd: ${args[0]}: No such file or directory`, "red");
+                    }
+                    break;
+                case 'cat':
+                    if(!args[0]) return log("cat: missing file", "red");
+                    if(curObj.children.includes(args[0]) && FS[args[0]].type === 'file') {
+                        log(FS[args[0]].content);
+                    } else log(`cat: ${args[0]}: No such file`, "red");
+                    break;
+                case 'rm':
+                    if(!args[0]) return log("rm: missing operand", "red");
+                    const idx = curObj.children.indexOf(args[0]);
+                    if(idx > -1) {
+                        curObj.children.splice(idx, 1);
+                        delete FS[args[0]];
+                        saveFS();
+                    } else log(`rm: cannot remove '${args[0]}': No such file`, "red");
+                    break;
+                case 'clear':
+                    out.innerHTML = "";
+                    break;
+                case 'whoami': log("root"); break;
+                case 'date': log(new Date().toString()); break;
+                default: log(`bash: ${cmd}: command not found`, "red");
+            }
+        }
+
+        // --- 6. INIT ---
+        window.onload = () => {
+            initMatrix();
+            
+            // Create Desktop Icons
+            const desk = document.getElementById('desktop');
+            Object.keys(Apps).forEach(key => {
+                if(key === 'reset') return; // Don't show reset icon if you want a clean desktop
+                const app = Apps[key];
+                const icon = document.createElement('div');
+                icon.className = 'icon';
+                icon.innerHTML = `<div class="icon-img">${app.icon}</div><div class="icon-text">${app.name}</div>`;
+                
+                // Click Logic
+                let lastTap = 0;
+                const activate = () => WM.open(key);
+                icon.addEventListener('pointerup', () => {
+                    const now = new Date().getTime();
+                    if(System.isMobile || now - lastTap < 300) activate();
+                    lastTap = now;
+                });
+                
+                desk.appendChild(icon);
+            });
+
+            // Add Start Menu Icon
+            const sb = document.createElement('div');
+            sb.className = 'kali-menu';
+            sb.onclick = () => alert("Menu functionality coming soon!");
+            document.getElementById('taskbar').prepend(sb);
+
+            // Add Reset Icon manually
+            const resetIcon = document.createElement('div');
+            resetIcon.className = 'icon';
+            resetIcon.innerHTML = `<div class="icon-img">⚠️</div><div class="icon-text">Reset</div>`;
+            resetIcon.onclick = () => { if(confirm("Reset OS?")) { localStorage.removeItem('kali_fs_v3'); location.reload(); }};
+            desk.appendChild(resetIcon);
+
+            // Auto-start Terminal
+            setTimeout(() => WM.open('terminal'), 500);
+        };
+
+    </script>
+</body>
+</html>
+</html>
